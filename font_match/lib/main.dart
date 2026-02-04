@@ -1,122 +1,246 @@
 import 'package:flutter/material.dart';
 
+import 'models/font_pair.dart';
+import 'services/font_pool_manager.dart';
+
 void main() {
-  runApp(const MyApp());
+  runApp(const FontMatchApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class FontMatchApp extends StatelessWidget {
+  const FontMatchApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Font Match',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2D7C7A)),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: FontMatchPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class FontMatchPage extends StatefulWidget {
+  FontMatchPage({super.key, FontPoolManager? fontPool})
+    : fontPool =
+          fontPool ??
+          FontPoolManager(
+            batchSize: 10,
+            lowWatermark: 3,
+            preloadConcurrency: 3,
+          );
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+  final FontPoolManager fontPool;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<FontMatchPage> createState() => _FontMatchPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _FontMatchPageState extends State<FontMatchPage> {
+  FontPair? _pair;
+  bool _isInitializing = true;
+  bool _isShuffling = false;
+  String? _error;
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      await _fontPool.initialize();
+      final FontPair initialPair = await _fontPool.nextPair();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _pair = initialPair;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _error = 'Unable to load Google Fonts. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _shufflePair() async {
+    if (_isShuffling || _isInitializing) {
+      return;
+    }
+
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _isShuffling = true;
+      _error = null;
     });
+
+    try {
+      final FontPair nextPair = await _fontPool.nextPair();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _pair = nextPair;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _error = 'Could not generate a new pair.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isShuffling = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final FontPoolSnapshot snapshot = _fontPool.snapshot;
+
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+      appBar: AppBar(title: const Text('Font Match')),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: _isInitializing
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text(
+                      'Tap shuffle to instantly try a new random Google Font pair.',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 20),
+                    Expanded(
+                      child: _pair == null
+                          ? _ErrorCard(
+                              message: _error ?? 'No pair available yet.',
+                            )
+                          : _PairPreview(
+                              pair: _pair!,
+                              styleFor: _fontPool.styleFor,
+                            ),
+                    ),
+                    if (_error != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    Text(
+                      'Loaded: ${snapshot.totalFamilies} families · '
+                      'Active ${snapshot.activeFamilies} · '
+                      'Warm ${snapshot.warmFamilies} · '
+                      'Remaining ${snapshot.activeRemaining} '
+                      '(${snapshot.isWarmPoolReady ? 'warm ready' : 'warming'})',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _isShuffling ? null : _shufflePair,
+                      icon: _isShuffling
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.shuffle),
+                      label: Text(
+                        _isShuffling ? 'Shuffling...' : 'Shuffle Pair',
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  FontPoolManager get _fontPool => widget.fontPool;
+}
+
+class _PairPreview extends StatelessWidget {
+  const _PairPreview({required this.pair, required this.styleFor});
+
+  final FontPair pair;
+  final TextStyle Function(
+    String family, {
+    double size,
+    FontWeight weight,
+    Color? color,
+  })
+  styleFor;
+
+  static const String sampleText =
+      'The quick brown fox jumps over the lazy dog';
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(pair.primary, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 8),
+          Text(
+            sampleText,
+            style: styleFor(pair.primary, size: 30, weight: FontWeight.w600),
+          ),
+          const SizedBox(height: 24),
+          Text(pair.secondary, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 8),
+          Text(
+            sampleText,
+            style: styleFor(pair.secondary, size: 24, weight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: Text(message, textAlign: TextAlign.center));
   }
 }
