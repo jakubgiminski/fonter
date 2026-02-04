@@ -32,8 +32,11 @@ class FontMatchPage extends StatefulWidget {
           FontPoolManager(
             batchSize: kIsWeb ? 20 : 10,
             lowWatermark: kIsWeb ? 8 : 3,
-            preloadConcurrency: kIsWeb ? 2 : 3,
+            preloadConcurrency: kIsWeb ? 1 : 3,
             readyPairTarget: kIsWeb ? 12 : 6,
+            familyLoadTimeout: kIsWeb
+                ? const Duration(milliseconds: 900)
+                : const Duration(milliseconds: 1500),
           );
 
   final FontPoolManager fontPool;
