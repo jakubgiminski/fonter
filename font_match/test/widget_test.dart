@@ -46,6 +46,7 @@ class FakeFontPoolManager extends FontPoolManager {
     activeFamilies: 10,
     warmFamilies: 10,
     activeRemaining: 8,
+    readyPairs: 6,
     isWarmPoolReady: true,
   );
 

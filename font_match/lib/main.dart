@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'models/font_pair.dart';
 import 'services/font_pool_manager.dart';
@@ -29,9 +30,10 @@ class FontMatchPage extends StatefulWidget {
     : fontPool =
           fontPool ??
           FontPoolManager(
-            batchSize: 10,
-            lowWatermark: 3,
-            preloadConcurrency: 3,
+            batchSize: kIsWeb ? 20 : 10,
+            lowWatermark: kIsWeb ? 8 : 3,
+            preloadConcurrency: kIsWeb ? 2 : 3,
+            readyPairTarget: kIsWeb ? 12 : 6,
           );
 
   final FontPoolManager fontPool;
@@ -159,6 +161,7 @@ class _FontMatchPageState extends State<FontMatchPage> {
                       'Loaded: ${snapshot.totalFamilies} families · '
                       'Active ${snapshot.activeFamilies} · '
                       'Warm ${snapshot.warmFamilies} · '
+                      'Ready ${snapshot.readyPairs} · '
                       'Remaining ${snapshot.activeRemaining} '
                       '(${snapshot.isWarmPoolReady ? 'warm ready' : 'warming'})',
                       style: Theme.of(context).textTheme.bodySmall,
