@@ -25,7 +25,7 @@ class FontPoolSnapshot {
   final bool isWarmPoolReady;
 }
 
-class FontPoolManager {
+class FontPoolManager extends ChangeNotifier {
   FontPoolManager({
     this.batchSize = 10,
     this.lowWatermark = 3,
@@ -69,8 +69,6 @@ class FontPoolManager {
 
   Future<void>? _warmupFuture;
 
-  FontPair? _lastServedPair;
-
   bool _isInitialized = false;
   bool _isMaintaining = false;
   bool _maintenanceQueued = false;
@@ -113,24 +111,24 @@ class FontPoolManager {
 
     _isInitialized = true;
     _scheduleMaintenance();
+    notifyListeners();
   }
 
-  Future<FontPair> nextPair() async {
+  Future<FontPair?> nextPair() async {
     if (!_isInitialized) {
       await initialize();
     }
 
-    final FontPair? pair = _readyPairs.isNotEmpty
-        ? _readyPairs.removeFirst()
-        : _lastServedPair ?? _drawFallbackPair();
-
-    if (pair == null) {
-      throw StateError('No font pair available.');
+    if (_readyPairs.isEmpty) {
+      _scheduleMaintenance();
+      notifyListeners();
+      return null;
     }
 
+    final FontPair pair = _readyPairs.removeFirst();
     _lastInteractionAt = DateTime.now();
-    _lastServedPair = pair;
     _scheduleMaintenance();
+    notifyListeners();
     return pair;
   }
 
@@ -222,6 +220,7 @@ class FontPoolManager {
     }
 
     _startWarmupIfNeeded();
+    notifyListeners();
   }
 
   void _fillReadyPairsSync() {
@@ -241,26 +240,6 @@ class FontPoolManager {
         _startWarmupIfNeeded();
       }
     }
-  }
-
-  FontPair? _drawFallbackPair() {
-    _ensureDeckForTapPath();
-    if (_activeDeck.length >= 2) {
-      return _drawPairFromActiveDeck();
-    }
-
-    final List<String> loaded = _preloadedFamilies.toList(growable: false);
-    if (loaded.length < 2) {
-      return null;
-    }
-
-    final String first = loaded[_random.nextInt(loaded.length)];
-    String second = first;
-    while (second == first) {
-      second = loaded[_random.nextInt(loaded.length)];
-    }
-
-    return FontPair(primary: first, secondary: second);
   }
 
   void _ensureDeckForTapPath() {

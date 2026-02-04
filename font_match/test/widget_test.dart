@@ -51,7 +51,7 @@ class FakeFontPoolManager extends FontPoolManager {
   );
 
   @override
-  Future<FontPair> nextPair() async {
+  Future<FontPair?> nextPair() async {
     final FontPair pair = _pairs[_index % _pairs.length];
     _index += 1;
     return pair;

@@ -57,19 +57,40 @@ class _FontMatchPageState extends State<FontMatchPage> {
   @override
   void initState() {
     super.initState();
+    _fontPool.addListener(_onPoolUpdated);
     _initialize();
+  }
+
+  @override
+  void didUpdateWidget(covariant FontMatchPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.fontPool == widget.fontPool) {
+      return;
+    }
+
+    oldWidget.fontPool.removeListener(_onPoolUpdated);
+    widget.fontPool.addListener(_onPoolUpdated);
+  }
+
+  @override
+  void dispose() {
+    _fontPool.removeListener(_onPoolUpdated);
+    super.dispose();
   }
 
   Future<void> _initialize() async {
     try {
       await _fontPool.initialize();
-      final FontPair initialPair = await _fontPool.nextPair();
+      final FontPair? initialPair = await _fontPool.nextPair();
       if (!mounted) {
         return;
       }
 
       setState(() {
         _pair = initialPair;
+        _error = initialPair == null
+            ? 'Warming up ready font pairs. Try again in a moment.'
+            : null;
       });
     } catch (error) {
       if (!mounted) {
@@ -99,13 +120,18 @@ class _FontMatchPageState extends State<FontMatchPage> {
     });
 
     try {
-      final FontPair nextPair = await _fontPool.nextPair();
+      final FontPair? nextPair = await _fontPool.nextPair();
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _pair = nextPair;
+        if (nextPair != null) {
+          _pair = nextPair;
+          _error = null;
+        } else {
+          _error = 'Warming up ready font pairs...';
+        }
       });
     } catch (error) {
       if (!mounted) {
@@ -127,6 +153,8 @@ class _FontMatchPageState extends State<FontMatchPage> {
   @override
   Widget build(BuildContext context) {
     final FontPoolSnapshot snapshot = _fontPool.snapshot;
+    final bool canShuffle =
+        !_isInitializing && !_isShuffling && snapshot.readyPairs > 0;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Font Match')),
@@ -174,7 +202,7 @@ class _FontMatchPageState extends State<FontMatchPage> {
                     ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
-                      onPressed: _isShuffling ? null : _shufflePair,
+                      onPressed: canShuffle ? _shufflePair : null,
                       icon: _isShuffling
                           ? const SizedBox(
                               width: 16,
@@ -183,7 +211,11 @@ class _FontMatchPageState extends State<FontMatchPage> {
                             )
                           : const Icon(Icons.shuffle),
                       label: Text(
-                        _isShuffling ? 'Shuffling...' : 'Shuffle Pair',
+                        _isShuffling
+                            ? 'Shuffling...'
+                            : snapshot.readyPairs == 0
+                            ? 'Warming Up...'
+                            : 'Shuffle Pair',
                       ),
                     ),
                   ],
@@ -191,6 +223,13 @@ class _FontMatchPageState extends State<FontMatchPage> {
         ),
       ),
     );
+  }
+
+  void _onPoolUpdated() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
   }
 
   FontPoolManager get _fontPool => widget.fontPool;
