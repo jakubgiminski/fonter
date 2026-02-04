@@ -28,11 +28,7 @@ class FontPoolSnapshot {
 class FontPoolManager extends ChangeNotifier {
   FontPoolManager({
     this.batchSize = 10,
-    this.lowWatermark = 3,
-    this.preloadConcurrency = 3,
-    this.readyPairTarget = 6,
     this.familyLoadTimeout = const Duration(milliseconds: 1500),
-    this.interactionCooldown = const Duration(milliseconds: 450),
     Random? random,
   }) : _random = random ?? Random();
 
@@ -47,41 +43,28 @@ class FontPoolManager extends ChangeNotifier {
   );
 
   final int batchSize;
-  final int lowWatermark;
-  final int preloadConcurrency;
-  final int readyPairTarget;
   final Duration familyLoadTimeout;
-  final Duration interactionCooldown;
   final Random _random;
 
   final Queue<String> _catalogQueue = Queue<String>();
-  final Queue<FontPair> _readyPairs = Queue<FontPair>();
-
   final Set<String> _preloadedFamilies = <String>{};
-  final Map<String, Future<bool>> _inflightPreloads = <String, Future<bool>>{};
   final Map<String, _PreviewStyles> _previewStyles = <String, _PreviewStyles>{};
 
   List<String> _allFamilies = <String>[];
   List<String> _activeFamilies = <String>[];
-  List<String> _warmFamilies = <String>[];
-
   final List<String> _activeDeck = <String>[];
 
-  Future<void>? _warmupFuture;
-
   bool _isInitialized = false;
-  bool _isMaintaining = false;
-  bool _maintenanceQueued = false;
-  bool _maintenanceDispatchScheduled = false;
-  DateTime _lastInteractionAt = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _isLoadingBatch = false;
+  Future<void>? _batchLoadFuture;
 
   FontPoolSnapshot get snapshot => FontPoolSnapshot(
     totalFamilies: _allFamilies.length,
     activeFamilies: _activeFamilies.length,
-    warmFamilies: _warmFamilies.length,
+    warmFamilies: _preloadedFamilies.length,
     activeRemaining: _activeDeck.length,
-    readyPairs: _readyPairs.length,
-    isWarmPoolReady: _warmFamilies.isNotEmpty,
+    readyPairs: _activeDeck.length ~/ 2,
+    isWarmPoolReady: !_isLoadingBatch,
   );
 
   Future<void> initialize() async {
@@ -95,22 +78,13 @@ class FontPoolManager extends ChangeNotifier {
     }
 
     _refillCatalogQueue();
-
-    _activeFamilies = await _pickAndPreloadBatch(
-      count: batchSize,
-      avoid: <String>{},
-    );
+    await _ensureBatchLoaded();
 
     if (_activeFamilies.length < 2) {
       throw StateError('Could not preload enough fonts to start.');
     }
 
-    _resetActiveDeck();
-    _startWarmupIfNeeded();
-    _fillReadyPairsSync();
-
     _isInitialized = true;
-    _scheduleMaintenance();
     notifyListeners();
   }
 
@@ -119,15 +93,22 @@ class FontPoolManager extends ChangeNotifier {
       await initialize();
     }
 
-    if (_readyPairs.isEmpty) {
-      _scheduleMaintenance();
+    if (_activeDeck.length < 2) {
+      await _ensureBatchLoaded();
+    }
+
+    if (_activeDeck.length < 2) {
       notifyListeners();
       return null;
     }
 
-    final FontPair pair = _readyPairs.removeFirst();
-    _lastInteractionAt = DateTime.now();
-    _scheduleMaintenance();
+    final FontPair pair = _drawPairFromActiveDeck();
+
+    // Load a fresh batch as soon as the current one is exhausted.
+    if (_activeDeck.length < 2) {
+      await _ensureBatchLoaded();
+    }
+
     notifyListeners();
     return pair;
   }
@@ -163,199 +144,55 @@ class FontPoolManager extends ChangeNotifier {
     return baseStyle.copyWith(color: color);
   }
 
-  void _scheduleMaintenance() {
-    if (_isMaintaining) {
-      _maintenanceQueued = true;
-      return;
+  Future<void> _ensureBatchLoaded() {
+    final Future<void>? inflight = _batchLoadFuture;
+    if (inflight != null) {
+      return inflight;
     }
 
-    if (_maintenanceDispatchScheduled) {
-      return;
-    }
+    final Future<void> future = _loadBatchInternal();
+    _batchLoadFuture = future;
 
-    final Duration remainingCooldown = _remainingInteractionCooldown();
-    if (remainingCooldown > Duration.zero) {
-      _maintenanceDispatchScheduled = true;
-      unawaited(
-        Future<void>.delayed(remainingCooldown, () {
-          _maintenanceDispatchScheduled = false;
-          _scheduleMaintenance();
-        }),
-      );
-      return;
-    }
-
-    _maintenanceDispatchScheduled = true;
-    unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 1), () async {
-        _maintenanceDispatchScheduled = false;
-        if (_isMaintaining) {
-          _maintenanceQueued = true;
-          return;
-        }
-
-        _isMaintaining = true;
-        do {
-          _maintenanceQueued = false;
-          await _runMaintenance();
-        } while (_maintenanceQueued);
-
-        _isMaintaining = false;
-      }),
-    );
+    return future.whenComplete(() {
+      _batchLoadFuture = null;
+    });
   }
 
-  Future<void> _runMaintenance() async {
-    _startWarmupIfNeeded();
-
-    if (_activeDeck.length <= lowWatermark && _warmFamilies.isNotEmpty) {
-      _activateWarmPool();
-    }
-
-    _fillReadyPairsSync();
-
-    if (_readyPairs.length < readyPairTarget && _activeDeck.length < 2) {
-      await _waitForWarmPoolIfNeeded();
-      _fillReadyPairsSync();
-    }
-
-    _startWarmupIfNeeded();
+  Future<void> _loadBatchInternal() async {
+    _isLoadingBatch = true;
     notifyListeners();
-  }
-
-  void _fillReadyPairsSync() {
-    while (_readyPairs.length < readyPairTarget) {
-      _ensureDeckForTapPath();
-      if (_activeDeck.length < 2) {
-        break;
-      }
-
-      final FontPair pair = _drawPairFromActiveDeck();
-      _readyPairs.addLast(pair);
-
-      if (_activeDeck.length <= lowWatermark) {
-        if (_warmFamilies.isNotEmpty) {
-          _activateWarmPool();
-        }
-        _startWarmupIfNeeded();
-      }
-    }
-  }
-
-  void _ensureDeckForTapPath() {
-    if (_activeDeck.length >= 2) {
-      return;
-    }
-
-    if (_warmFamilies.isNotEmpty) {
-      _activateWarmPool();
-      return;
-    }
-
-    if (_activeFamilies.length >= 2) {
-      _resetActiveDeck();
-    }
-  }
-
-  FontPair _drawPairFromActiveDeck() {
-    final String first = _drawFromActiveDeck();
-    String second = _drawFromActiveDeck();
-
-    if (first == second) {
-      _ensureDeckForTapPath();
-      if (_activeDeck.isNotEmpty) {
-        second = _drawFromActiveDeck();
-      }
-    }
-
-    return FontPair(primary: first, secondary: second);
-  }
-
-  Future<void> _waitForWarmPoolIfNeeded() async {
-    final Future<void>? warmup = _warmupFuture;
-    if (warmup == null) {
-      return;
-    }
 
     try {
-      await warmup;
-    } catch (_) {
-      return;
-    }
-
-    if (_warmFamilies.isNotEmpty) {
-      _activateWarmPool();
+      _activeFamilies = await _pickAndPreloadBatch(count: batchSize);
+      _resetActiveDeck();
+    } finally {
+      _isLoadingBatch = false;
+      notifyListeners();
     }
   }
 
-  void _activateWarmPool() {
-    _activeFamilies = List<String>.from(_warmFamilies);
-    _warmFamilies = <String>[];
-    _resetActiveDeck();
-    _startWarmupIfNeeded();
-  }
-
-  void _startWarmupIfNeeded() {
-    if (_warmFamilies.isNotEmpty || _warmupFuture != null) {
-      return;
-    }
-
-    _warmupFuture = Future<void>.delayed(const Duration(milliseconds: 1))
-        .then((_) => _prepareWarmPool())
-        .catchError((_) {})
-        .whenComplete(() {
-          _warmupFuture = null;
-          _scheduleMaintenance();
-        });
-  }
-
-  Future<void> _prepareWarmPool() async {
-    _warmFamilies = await _pickAndPreloadBatch(
-      count: batchSize,
-      avoid: _activeFamilies.toSet(),
-    );
-  }
-
-  Future<List<String>> _pickAndPreloadBatch({
-    required int count,
-    required Set<String> avoid,
-  }) async {
+  Future<List<String>> _pickAndPreloadBatch({required int count}) async {
     final int target = min(count, _allFamilies.length);
     final Set<String> loaded = <String>{};
-    final Set<String> attempted = <String>{};
-
     final int maxAttempts = _allFamilies.length * 2;
+    int attempts = 0;
 
-    while (loaded.length < target && attempted.length < maxAttempts) {
-      await _waitForInteractionCooldown();
+    while (loaded.length < target && attempts < maxAttempts) {
+      final String candidate = _nextCatalogFamily();
+      attempts += 1;
 
-      final List<String> chunk = _takeCandidateChunk(
-        attempted: attempted,
-        avoid: avoid,
-      );
-
-      if (chunk.isEmpty) {
-        break;
+      final bool loadedFamily = await _preloadFamily(candidate);
+      if (loadedFamily) {
+        loaded.add(candidate);
       }
 
-      final List<bool> results = await Future.wait(chunk.map(_preloadFamily));
-      for (int index = 0; index < chunk.length; index += 1) {
-        if (results[index]) {
-          loaded.add(chunk[index]);
-        }
-      }
-
-      // Yield so batch prep doesn't monopolize the UI isolate on web.
+      // Yield so browser main-thread work can paint between loads.
       await Future<void>.delayed(Duration.zero);
     }
 
     if (loaded.length < target) {
-      final List<String> fallback =
-          _preloadedFamilies
-              .where((String family) => !avoid.contains(family))
-              .toList()
-            ..shuffle(_random);
-
+      final List<String> fallback = _preloadedFamilies.toList()
+        ..shuffle(_random);
       for (final String family in fallback) {
         if (loaded.length == target) {
           break;
@@ -364,51 +201,14 @@ class FontPoolManager extends ChangeNotifier {
       }
     }
 
-    final List<String> result = loaded.toList(growable: false)
-      ..shuffle(_random);
-    return result;
+    return loaded.toList(growable: false)..shuffle(_random);
   }
 
-  List<String> _takeCandidateChunk({
-    required Set<String> attempted,
-    required Set<String> avoid,
-  }) {
-    final List<String> chunk = <String>[];
-    final int chunkTarget = preloadConcurrency.clamp(1, batchSize);
-
-    while (chunk.length < chunkTarget &&
-        attempted.length < _allFamilies.length) {
-      final String candidate = _nextCatalogFamily();
-      if (avoid.contains(candidate) || attempted.contains(candidate)) {
-        continue;
-      }
-
-      attempted.add(candidate);
-      chunk.add(candidate);
-    }
-
-    return chunk;
-  }
-
-  Future<bool> _preloadFamily(String family) {
+  Future<bool> _preloadFamily(String family) async {
     if (_preloadedFamilies.contains(family)) {
-      return Future<bool>.value(true);
+      return true;
     }
 
-    final Future<bool>? inflight = _inflightPreloads[family];
-    if (inflight != null) {
-      return inflight;
-    }
-
-    final Future<bool> future = _preloadFamilyInternal(family);
-    _inflightPreloads[family] = future;
-
-    return future.whenComplete(() {
-      _inflightPreloads.remove(family);
-    });
-  }
-
-  Future<bool> _preloadFamilyInternal(String family) async {
     final List<TextStyle> styles = <TextStyle>[
       GoogleFonts.getFont(family, textStyle: _primaryPreviewStyle),
       GoogleFonts.getFont(family, textStyle: _secondaryPreviewStyle),
@@ -420,10 +220,10 @@ class FontPoolManager extends ChangeNotifier {
         primary: styles[0],
         secondary: styles[1],
       );
-      await _waitForInteractionCooldown();
+
       await _primeTextLayout(previewStyles.primary);
-      await _waitForInteractionCooldown();
       await _primeTextLayout(previewStyles.secondary);
+
       _previewStyles[family] = previewStyles;
       _preloadedFamilies.add(family);
       return true;
@@ -443,34 +243,17 @@ class FontPoolManager extends ChangeNotifier {
     )..layout();
 
     painter.dispose();
-
-    // Yield to keep interaction frames responsive during warm-up.
     await Future<void>.delayed(Duration.zero);
   }
 
-  Future<void> _waitForInteractionCooldown() async {
-    final Duration remaining = _remainingInteractionCooldown();
-    if (remaining <= Duration.zero) {
-      return;
+  FontPair _drawPairFromActiveDeck() {
+    if (_activeDeck.length < 2) {
+      throw StateError('Not enough loaded fonts to draw a pair.');
     }
 
-    await Future<void>.delayed(remaining);
-  }
-
-  Duration _remainingInteractionCooldown() {
-    final Duration elapsed = DateTime.now().difference(_lastInteractionAt);
-    if (elapsed >= interactionCooldown) {
-      return Duration.zero;
-    }
-    return interactionCooldown - elapsed;
-  }
-
-  String _drawFromActiveDeck() {
-    if (_activeDeck.isEmpty) {
-      _activeDeck.addAll(_activeFamilies..shuffle(_random));
-    }
-
-    return _activeDeck.removeLast();
+    final String first = _activeDeck.removeLast();
+    final String second = _activeDeck.removeLast();
+    return FontPair(primary: first, secondary: second);
   }
 
   String _nextCatalogFamily() {
@@ -487,9 +270,10 @@ class FontPoolManager extends ChangeNotifier {
   }
 
   void _resetActiveDeck() {
+    final List<String> shuffled = _activeFamilies.toList()..shuffle(_random);
     _activeDeck
       ..clear()
-      ..addAll(_activeFamilies..shuffle(_random));
+      ..addAll(shuffled);
   }
 }
 

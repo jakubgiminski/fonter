@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 
 import 'models/font_pair.dart';
 import 'services/font_pool_manager.dart';
@@ -27,20 +26,7 @@ class FontMatchApp extends StatelessWidget {
 
 class FontMatchPage extends StatefulWidget {
   FontMatchPage({super.key, FontPoolManager? fontPool})
-    : fontPool =
-          fontPool ??
-          FontPoolManager(
-            batchSize: kIsWeb ? 30 : 10,
-            lowWatermark: kIsWeb ? 12 : 3,
-            preloadConcurrency: kIsWeb ? 1 : 3,
-            readyPairTarget: kIsWeb ? 24 : 6,
-            familyLoadTimeout: kIsWeb
-                ? const Duration(milliseconds: 900)
-                : const Duration(milliseconds: 1500),
-            interactionCooldown: kIsWeb
-                ? const Duration(milliseconds: 500)
-                : const Duration(milliseconds: 300),
-          );
+    : fontPool = fontPool ?? FontPoolManager(batchSize: 10);
 
   final FontPoolManager fontPool;
 
@@ -52,6 +38,7 @@ class _FontMatchPageState extends State<FontMatchPage> {
   FontPair? _pair;
   bool _isInitializing = true;
   bool _isShuffling = false;
+  bool _isLoadingMore = false;
   String? _error;
 
   @override
@@ -88,9 +75,7 @@ class _FontMatchPageState extends State<FontMatchPage> {
 
       setState(() {
         _pair = initialPair;
-        _error = initialPair == null
-            ? 'Warming up ready font pairs. Try again in a moment.'
-            : null;
+        _error = initialPair == null ? 'Loading fonts' : null;
       });
     } catch (error) {
       if (!mounted) {
@@ -114,9 +99,13 @@ class _FontMatchPageState extends State<FontMatchPage> {
       return;
     }
 
+    final FontPoolSnapshot beforeShuffle = _fontPool.snapshot;
+    final bool loadingMore = beforeShuffle.readyPairs <= 1;
+
     setState(() {
       _isShuffling = true;
-      _error = null;
+      _isLoadingMore = loadingMore;
+      _error = loadingMore ? 'Loading more fonts' : null;
     });
 
     try {
@@ -130,7 +119,7 @@ class _FontMatchPageState extends State<FontMatchPage> {
           _pair = nextPair;
           _error = null;
         } else {
-          _error = 'Warming up ready font pairs...';
+          _error = 'Loading more fonts';
         }
       });
     } catch (error) {
@@ -145,6 +134,7 @@ class _FontMatchPageState extends State<FontMatchPage> {
       if (mounted) {
         setState(() {
           _isShuffling = false;
+          _isLoadingMore = false;
         });
       }
     }
@@ -153,8 +143,7 @@ class _FontMatchPageState extends State<FontMatchPage> {
   @override
   Widget build(BuildContext context) {
     final FontPoolSnapshot snapshot = _fontPool.snapshot;
-    final bool canShuffle =
-        !_isInitializing && !_isShuffling && snapshot.readyPairs > 0;
+    final bool canShuffle = !_isInitializing && !_isShuffling;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Font Match')),
@@ -162,7 +151,16 @@ class _FontMatchPageState extends State<FontMatchPage> {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: _isInitializing
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
+                      Text('Loading fonts'),
+                    ],
+                  ),
+                )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
@@ -194,10 +192,9 @@ class _FontMatchPageState extends State<FontMatchPage> {
                     Text(
                       'Loaded: ${snapshot.totalFamilies} families · '
                       'Active ${snapshot.activeFamilies} · '
-                      'Warm ${snapshot.warmFamilies} · '
-                      'Ready ${snapshot.readyPairs} · '
-                      'Remaining ${snapshot.activeRemaining} '
-                      '(${snapshot.isWarmPoolReady ? 'warm ready' : 'warming'})',
+                      'Cached ${snapshot.warmFamilies} · '
+                      'Remaining ${snapshot.activeRemaining} · '
+                      'Ready pairs ${snapshot.readyPairs}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 16),
@@ -211,10 +208,10 @@ class _FontMatchPageState extends State<FontMatchPage> {
                             )
                           : const Icon(Icons.shuffle),
                       label: Text(
-                        _isShuffling
+                        _isLoadingMore
+                            ? 'Loading more fonts'
+                            : _isShuffling
                             ? 'Shuffling...'
-                            : snapshot.readyPairs == 0
-                            ? 'Warming Up...'
                             : 'Shuffle Pair',
                       ),
                     ),
