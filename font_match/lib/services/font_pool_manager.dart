@@ -32,6 +32,7 @@ class FontPoolManager {
     this.preloadConcurrency = 3,
     this.readyPairTarget = 6,
     this.familyLoadTimeout = const Duration(milliseconds: 1500),
+    this.interactionCooldown = const Duration(milliseconds: 450),
     Random? random,
   }) : _random = random ?? Random();
 
@@ -50,6 +51,7 @@ class FontPoolManager {
   final int preloadConcurrency;
   final int readyPairTarget;
   final Duration familyLoadTimeout;
+  final Duration interactionCooldown;
   final Random _random;
 
   final Queue<String> _catalogQueue = Queue<String>();
@@ -73,6 +75,7 @@ class FontPoolManager {
   bool _isMaintaining = false;
   bool _maintenanceQueued = false;
   bool _maintenanceDispatchScheduled = false;
+  DateTime _lastInteractionAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   FontPoolSnapshot get snapshot => FontPoolSnapshot(
     totalFamilies: _allFamilies.length,
@@ -125,6 +128,7 @@ class FontPoolManager {
       throw StateError('No font pair available.');
     }
 
+    _lastInteractionAt = DateTime.now();
     _lastServedPair = pair;
     _scheduleMaintenance();
     return pair;
@@ -168,6 +172,18 @@ class FontPoolManager {
     }
 
     if (_maintenanceDispatchScheduled) {
+      return;
+    }
+
+    final Duration remainingCooldown = _remainingInteractionCooldown();
+    if (remainingCooldown > Duration.zero) {
+      _maintenanceDispatchScheduled = true;
+      unawaited(
+        Future<void>.delayed(remainingCooldown, () {
+          _maintenanceDispatchScheduled = false;
+          _scheduleMaintenance();
+        }),
+      );
       return;
     }
 
@@ -332,6 +348,8 @@ class FontPoolManager {
     final int maxAttempts = _allFamilies.length * 2;
 
     while (loaded.length < target && attempted.length < maxAttempts) {
+      await _waitForInteractionCooldown();
+
       final List<String> chunk = _takeCandidateChunk(
         attempted: attempted,
         avoid: avoid,
@@ -423,7 +441,9 @@ class FontPoolManager {
         primary: styles[0],
         secondary: styles[1],
       );
+      await _waitForInteractionCooldown();
       await _primeTextLayout(previewStyles.primary);
+      await _waitForInteractionCooldown();
       await _primeTextLayout(previewStyles.secondary);
       _previewStyles[family] = previewStyles;
       _preloadedFamilies.add(family);
@@ -447,6 +467,23 @@ class FontPoolManager {
 
     // Yield to keep interaction frames responsive during warm-up.
     await Future<void>.delayed(Duration.zero);
+  }
+
+  Future<void> _waitForInteractionCooldown() async {
+    final Duration remaining = _remainingInteractionCooldown();
+    if (remaining <= Duration.zero) {
+      return;
+    }
+
+    await Future<void>.delayed(remaining);
+  }
+
+  Duration _remainingInteractionCooldown() {
+    final Duration elapsed = DateTime.now().difference(_lastInteractionAt);
+    if (elapsed >= interactionCooldown) {
+      return Duration.zero;
+    }
+    return interactionCooldown - elapsed;
   }
 
   String _drawFromActiveDeck() {
