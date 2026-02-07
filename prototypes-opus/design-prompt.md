@@ -1,0 +1,1 @@
+In this empty directory set up a react/typescript project. Inside, declare 5 routes - each for a unique working design prototype. Each prototype must contain all the features defined in the @project-overview.md file. Additionally, follow the @design-prototype.md guildelines.
