@@ -11,7 +11,7 @@ User is able to select one of the layouts:
 - Brief
 - Essay
 - Quote
-See @layouts.md to get detailed display properties.
+See layouts.md file to get detailed display properties.
 
 ### Content
 Each content snippet has title, subtitle, and 2 paragraphs. Each layout depends on content from a combination of title/subtitle/paragraphs.
@@ -22,7 +22,7 @@ User can select author's last name which updates content on the preview.
 - Meyer
 - Martin
 - Herbert
-See @content.md to get title, subtitle, and 2 paragraphs for each snippet.
+See content.md file to get title, subtitle, and 2 paragraphs for each snippet.
 
 ### Shuffling
 Clicking "shuffle fonts" button loads a new pair of fonts into the preview.
