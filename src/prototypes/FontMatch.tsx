@@ -1,4 +1,4 @@
-import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { authorKeys, type AuthorKey, type ContentSnippet } from "../data/content";
 import type { FontEntry } from "../data/fonts";
 import { layoutOptions, type LayoutType, useFontMatch } from "../hooks/useFontMatch";
@@ -223,10 +223,45 @@ function FontMatch() {
     setPrimary,
     setSecondary,
   } = useFontMatch();
+  const controlsWrapRef = useRef<HTMLDivElement | null>(null);
+  const [mobileControlsHeight, setMobileControlsHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const controlsNode = controlsWrapRef.current;
+    if (!controlsNode || typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 780px)");
+    const updateHeight = () => {
+      if (!mediaQuery.matches) {
+        setMobileControlsHeight(0);
+        return;
+      }
+
+      setMobileControlsHeight(Math.ceil(controlsNode.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateHeight();
+    });
+    resizeObserver.observe(controlsNode);
+    window.addEventListener("resize", updateHeight);
+    mediaQuery.addEventListener("change", updateHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateHeight);
+      mediaQuery.removeEventListener("change", updateHeight);
+    };
+  }, []);
 
   const fontVariables = {
     "--primary-font": `"${primary.family}", ${primary.category}`,
     "--secondary-font": `"${secondary.family}", ${secondary.category}`,
+    "--mobile-controls-height": `${mobileControlsHeight}px`,
   } as CSSProperties;
 
   return (
@@ -236,45 +271,53 @@ function FontMatch() {
           <LayoutPreview layout={layout} content={content} />
         </div>
 
-        <div className="font-match-controls-wrap">
+        <div ref={controlsWrapRef} className="font-match-controls-wrap">
           <div className="font-match-controls">
             <div className="font-match-font-row">
-              <FontSelect
-                ariaLabel="Primary font"
-                fonts={fonts}
-                value={primary.family}
-                onChange={setPrimary}
-                disabled={isPairUpdating}
-              />
-              <LockButton
-                locked={locked === "primary"}
-                ariaLabel="Lock primary font"
-                onClick={() => toggleLock("primary")}
-                disabled={isPairUpdating}
-              />
-              <button
-                type="button"
-                className="font-match-shuffle"
-                onClick={() => {
-                  void shuffle();
-                }}
-                disabled={isPairUpdating || isCatalogLoading}
-              >
-                {isPairUpdating ? "Switching..." : "Shuffle Fonts"}
-              </button>
-              <LockButton
-                locked={locked === "secondary"}
-                ariaLabel="Lock secondary font"
-                onClick={() => toggleLock("secondary")}
-                disabled={isPairUpdating}
-              />
-              <FontSelect
-                ariaLabel="Secondary font"
-                fonts={fonts}
-                value={secondary.family}
-                onChange={setSecondary}
-                disabled={isPairUpdating}
-              />
+              <div className="font-match-control-row font-match-control-row-primary">
+                <FontSelect
+                  ariaLabel="Primary font"
+                  fonts={fonts}
+                  value={primary.family}
+                  onChange={setPrimary}
+                  disabled={isPairUpdating}
+                />
+                <LockButton
+                  locked={locked === "primary"}
+                  ariaLabel="Lock primary font"
+                  onClick={() => toggleLock("primary")}
+                  disabled={isPairUpdating}
+                />
+              </div>
+
+              <div className="font-match-control-row font-match-control-row-shuffle">
+                <button
+                  type="button"
+                  className="font-match-shuffle"
+                  onClick={() => {
+                    void shuffle();
+                  }}
+                  disabled={isPairUpdating || isCatalogLoading}
+                >
+                  {isPairUpdating ? "Switching..." : "Shuffle Fonts"}
+                </button>
+              </div>
+
+              <div className="font-match-control-row font-match-control-row-secondary">
+                <LockButton
+                  locked={locked === "secondary"}
+                  ariaLabel="Lock secondary font"
+                  onClick={() => toggleLock("secondary")}
+                  disabled={isPairUpdating}
+                />
+                <FontSelect
+                  ariaLabel="Secondary font"
+                  fonts={fonts}
+                  value={secondary.family}
+                  onChange={setSecondary}
+                  disabled={isPairUpdating}
+                />
+              </div>
             </div>
 
             <div className="font-match-divider-horizontal" />

@@ -35,9 +35,3 @@ npm run build # build for prod
 npm run preview # preview pord build
 npm run lint # run code linter
 ```
-
-## Notes
-
-- The frontend app now lives at the repository root.
-- Specs and implementation notes remain in `spec/`.
-- During dev/preview, Vite proxies `/api/google-fonts-metadata` to Google Fonts metadata.
