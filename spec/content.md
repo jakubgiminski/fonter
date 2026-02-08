@@ -17,4 +17,4 @@ Each snippet has these fields:
 | Herbert | Sands of Prophecy | The Voice of Arrakis |
 
 ## Canonical text source
-Full paragraph text is maintained in `app/src/data/content.ts`.
+Full paragraph text is maintained in `src/data/content.ts`.
