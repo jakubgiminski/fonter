@@ -39,6 +39,8 @@ const DEFAULT_GOOGLE_FONT_CATALOG_URL = "/api/google-fonts-metadata";
 const GOOGLE_FONT_CACHE_KEY = "font-match-google-font-catalog-v1";
 const GOOGLE_FONT_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const TARGET_RENDER_WEIGHTS = [300, 400, 700];
+const FONT_FACE_WAIT_TIMEOUT_MS = 4000;
+const FONT_FACE_SAMPLE_TEXT = "Hamburgefontsiv 0123456789";
 const CONFIGURED_GOOGLE_FONT_CATALOG_URL = import.meta.env.VITE_GOOGLE_FONTS_METADATA_URL?.trim();
 const GOOGLE_FONT_CATALOG_URLS = [
   CONFIGURED_GOOGLE_FONT_CATALOG_URL,
@@ -147,6 +149,10 @@ function toGoogleFontsUrl(family: string, availableWeights: number[]): string {
   const weightsStr = optimizedWeights.join(";");
   const familyStr = encodeURIComponent(family).replace(/%20/g, "+");
   return `https://fonts.googleapis.com/css2?family=${familyStr}:wght@${weightsStr}&display=swap`;
+}
+
+function getOptimizedRenderWeights(availableWeights: number[]): number[] {
+  return pickClosestWeights(normalizeWeights(availableWeights), TARGET_RENDER_WEIGHTS);
 }
 
 function ensureFontPreconnect(): void {
@@ -290,11 +296,35 @@ export function loadFont(family: string, availableWeights: number[] = [300, 400,
   const existing = fontLoadPromises.get(key);
   if (existing) return existing;
 
+  const waitForFontFaces = async () => {
+    if (!("fonts" in document) || typeof document.fonts.load !== "function") {
+      return;
+    }
+
+    const renderWeights = getOptimizedRenderWeights(availableWeights);
+    const loads = renderWeights.map((weight) =>
+      document.fonts.load(`${weight} 1em "${family}"`, FONT_FACE_SAMPLE_TEXT).catch(() => [])
+    );
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      window.setTimeout(resolve, FONT_FACE_WAIT_TIMEOUT_MS);
+    });
+
+    await Promise.race([
+      Promise.all(loads).then(() => undefined),
+      timeoutPromise,
+    ]);
+  };
+
   const loadPromise = new Promise<void>((resolve) => {
+    const finalize = () => {
+      void waitForFontFaces().finally(() => resolve());
+    };
+
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = href;
-    link.onload = () => resolve();
+    link.onload = finalize;
     link.onerror = () => resolve();
     document.head.appendChild(link);
   });

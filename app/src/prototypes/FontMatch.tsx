@@ -277,10 +277,6 @@ function FontMatch() {
               />
             </div>
 
-            <div className="font-match-font-meta">
-              <span>{isCatalogLoading ? "Loading Google Fonts catalog..." : `${fonts.length} fonts available`}</span>
-            </div>
-
             <div className="font-match-divider-horizontal" />
 
             <div className="font-match-bottom-row">
