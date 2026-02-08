@@ -1,36 +1,56 @@
 ## Overview
-When designing an interface, one of the first things we focus on is finding the perfect fonts that work great together and give our app a unique feel. 
-However, going over countless fonts while displaying two fonts next to each other can be tedious and time consuming. 
+Font Match is a single-screen React + TypeScript app for trying font pairings in realistic text layouts.
+The user controls two roles:
+- Primary font
+- Secondary font
 
-Let's solve this problem by creating an app that allows users to iterate over font pairs while previewing them using different layouts and content.
+The preview area renders one selected layout. Controls stay visually stable while only font/content selections change.
 
+## Implemented behavior
 ### Layouts
-Preview shows a combination of title, subtitle, and/or paragraphs, each using primary or secondary font face.
-User is able to select one of the layouts:
+The app supports four preview layouts:
 - Hero
 - Brief
 - Essay
 - Quote
-See @layouts.md to get detailed display properties.
+
+See `spec/layouts.md` for exact field usage and typography values.
 
 ### Content
-Each content snippet has title, subtitle, and 2 paragraphs. Each layout depends on content from a combination of title/subtitle/paragraphs.
-User can select author's last name which updates content on the preview.
+Each author snippet includes:
+- `title`
+- `subtitle`
+- `paragraph1`
+- `paragraph2`
+
+Available authors:
 - Lucas
 - Rowling
 - Tolkien
 - Meyer
 - Martin
 - Herbert
-See @content.md to get title, subtitle, and 2 paragraphs for each snippet.
 
-### Shuffling
-Clicking "shuffle fonts" button loads a new pair of fonts into the preview.
-User should be able to: 
-- Lock one of the fonts, so that shuffling only changes the other one. Locking second font, unlocks the fisrt one (only one font can be locked at a time)
+See `spec/content.md` for the active content catalog.
 
-## Technical Requirements
-- Use React and Typescript for this, creating a web app that works in the browser.
-- We have to make it look and work great on both desktop wide viewports, as well as mobile narrow ones.
-- Design of controls should be minimalistic and stable (it doesn't change, the user only changes the fonts in the font matching preview.)
-- Don't use any vivid colors, we want to oscilate around white/beige/grey/almost black, enabling typography to be at the center.
+### Font controls and shuffle
+- Two dropdowns select primary and secondary fonts from a shared font pool.
+- `Shuffle Fonts` randomizes both fonts.
+- One lock can be active at a time.
+- If `primary` is locked, shuffle changes only `secondary`.
+- If `secondary` is locked, shuffle changes only `primary`.
+- Clicking the same lock again unlocks both.
+
+### Initial state
+- Layout defaults to `hero`.
+- Author defaults to the first author key (`Lucas`).
+- Font pair initializes with a random non-duplicate pair.
+
+### Loading fonts
+Selected font families are loaded on demand from Google Fonts and memoized so duplicate link tags are not appended.
+
+## Technical requirements (current)
+- Stack: React + TypeScript + Vite.
+- Browser-only frontend (no backend).
+- Responsive behavior for desktop and mobile.
+- Minimal neutral visual palette (white/gray/near-black) to keep typography as the focus.

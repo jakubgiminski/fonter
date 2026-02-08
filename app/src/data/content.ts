@@ -50,7 +50,7 @@ export const contentSnippets: Record<string, ContentSnippet> = {
     paragraph1:
       "Snow fell in great, soft spirals as Jon Snow stood atop the icy ramparts, staring into the white wilderness that stretched beyond all maps. Cold cut through his cloak like a blade, yet even the bitter wind couldn\u2019t chill the fire burning in his chest. Stories of what lay ahead were as varied as the stars above \u2014 some spoke of myth, others of terror \u2014 but Jon knew the truth would be more complex than legend or fear.",
     paragraph2:
-      "Far ahead, the sky glowed with an otherworldly shimmer. It was not the warm pulse of hearthfire, but something harsher \u2014 stark and unrelenting. With every beat of his heart, Jon felt the weight of expectation settle upon him, as heavy as Valyrian steel. Somewhere out there, allies and adversaries alike awaited, their fates entangled in the cracking ice and flickering flame. The cold wind whispered of trials yet to come, but Jon\u2019s resolve remained unbroken.",
+      "Far ahead, the sky glowed with an otherworldly shimmer. It was not the amber pulse of hearthfire, but something harsher \u2014 stark and unrelenting. With every beat of his heart, Jon felt the weight of expectation settle upon him, as heavy as Valyrian steel. Somewhere out there, allies and adversaries alike awaited, their fates entangled in the cracking ice and flickering flame. The cold wind whispered of trials yet to come, but Jon\u2019s resolve remained unbroken.",
   },
   Herbert: {
     author: "Herbert",
@@ -63,4 +63,6 @@ export const contentSnippets: Record<string, ContentSnippet> = {
   },
 };
 
-export const authorKeys = Object.keys(contentSnippets) as Array<keyof typeof contentSnippets>;
+export type AuthorKey = keyof typeof contentSnippets;
+
+export const authorKeys = Object.keys(contentSnippets) as AuthorKey[];

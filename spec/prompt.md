@@ -1,8 +1,14 @@
 # Task
-In this empty directory set up a react/typescript project. Inside, declare 5 routes - each for a unique working design prototype. Each prototype must stricty follow the @spec.md.
+Build a React + TypeScript web app that implements the font matching experience from `spec/spec.md`.
 
-- Make 5 unique working design prototypes, each distinctly different from all the others
-- Only use a handful of google fonts to rotate through, focus on the user experience design
-- Each design prototype should be under a different react route
-- Prototype should be clickable but don't bother doing any backend
-- Use frontend-design skill
+## Scope
+- Deliver one working app experience (single route/screen).
+- Keep controls interactive and frontend-only (no backend).
+- Support desktop and mobile layouts.
+- Use a curated Google Font pool for pairing exploration.
+
+## Functional requirements
+- Two font roles: primary and secondary.
+- Four preview layouts: Hero, Brief, Essay, Quote.
+- Author-based content switching.
+- Shuffle with one-at-a-time lock behavior for primary/secondary fonts.

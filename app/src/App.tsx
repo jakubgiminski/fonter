@@ -1,8 +1,8 @@
-import Warm from "./prototypes/Warm";
+import FontMatch from "./prototypes/FontMatch";
 import "./index.css";
 
 function App() {
-  return <Warm />;
+  return <FontMatch />;
 }
 
 export default App;

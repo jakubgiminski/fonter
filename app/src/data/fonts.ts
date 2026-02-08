@@ -31,7 +31,7 @@ export const fontPool: FontEntry[] = [
   { family: "Space Mono", weights: [400, 700], category: "monospace" },
 ];
 
-let loadedFonts = new Set<string>();
+const loadedFonts = new Set<string>();
 
 export function loadFont(family: string, weights: number[] = [300, 400, 500, 600, 700]): void {
   const key = `${family}-${weights.join(",")}`;

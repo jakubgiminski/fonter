@@ -2,31 +2,33 @@ import { useState, useCallback, useEffect } from "react";
 import { getRandomFont, getRandomPair, loadFont, fontPool } from "../data/fonts";
 import type { FontEntry } from "../data/fonts";
 import { contentSnippets, authorKeys } from "../data/content";
-import type { ContentSnippet } from "../data/content";
+import type { AuthorKey, ContentSnippet } from "../data/content";
 
-export type LayoutType = "hero" | "brief" | "essay" | "quote";
-export type LockTarget = "primary" | "secondary" | null;
+export const layoutOptions = ["hero", "brief", "essay", "quote"] as const;
+export type LayoutType = (typeof layoutOptions)[number];
+export type FontSlot = "primary" | "secondary";
+export type LockTarget = FontSlot | null;
 
 export interface FontMatchState {
   primary: FontEntry;
   secondary: FontEntry;
   layout: LayoutType;
-  author: string;
+  author: AuthorKey;
   content: ContentSnippet;
   locked: LockTarget;
   fonts: FontEntry[];
   shuffle: () => void;
   setLayout: (l: LayoutType) => void;
-  setAuthor: (a: string) => void;
-  toggleLock: (target: "primary" | "secondary") => void;
+  setAuthor: (a: AuthorKey) => void;
+  toggleLock: (target: FontSlot) => void;
   setPrimary: (family: string) => void;
   setSecondary: (family: string) => void;
 }
 
 export function useFontMatch(): FontMatchState {
   const [pair, setPair] = useState<[FontEntry, FontEntry]>(() => getRandomPair());
-  const [layout, setLayout] = useState<LayoutType>("hero");
-  const [author, setAuthor] = useState<string>(authorKeys[0]);
+  const [layout, setLayout] = useState<LayoutType>(layoutOptions[0]);
+  const [author, setAuthor] = useState<AuthorKey>(authorKeys[0]);
   const [locked, setLocked] = useState<LockTarget>(null);
 
   const [primary, secondary] = pair;
@@ -48,21 +50,26 @@ export function useFontMatch(): FontMatchState {
     });
   }, [locked]);
 
-  const toggleLock = useCallback((target: "primary" | "secondary") => {
+  const toggleLock = useCallback((target: FontSlot) => {
     setLocked((prev) => (prev === target ? null : target));
   }, []);
 
-  const setPrimary = useCallback((family: string) => {
-    const font = fontPool.find((f) => f.family === family);
+  const setFont = useCallback((target: FontSlot, family: string) => {
+    const font = fontPool.find((entry) => entry.family === family);
     if (!font) return;
-    setPair(([, prev2]) => [font, prev2]);
+
+    setPair(([prevPrimary, prevSecondary]) =>
+      target === "primary" ? [font, prevSecondary] : [prevPrimary, font]
+    );
   }, []);
 
+  const setPrimary = useCallback((family: string) => {
+    setFont("primary", family);
+  }, [setFont]);
+
   const setSecondary = useCallback((family: string) => {
-    const font = fontPool.find((f) => f.family === family);
-    if (!font) return;
-    setPair(([prev1]) => [prev1, font]);
-  }, []);
+    setFont("secondary", family);
+  }, [setFont]);
 
   return {
     primary,
