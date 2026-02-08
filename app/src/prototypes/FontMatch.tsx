@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
 import { authorKeys, type AuthorKey, type ContentSnippet } from "../data/content";
 import type { FontEntry } from "../data/fonts";
 import { layoutOptions, type LayoutType, useFontMatch } from "../hooks/useFontMatch";
@@ -23,17 +23,92 @@ interface FontSelectProps {
   fonts: FontEntry[];
   value: string;
   onChange: (family: string) => void;
+  disabled?: boolean;
 }
 
-function FontSelect({ ariaLabel, fonts, value, onChange }: FontSelectProps) {
+function FontSelect({ ariaLabel, fonts, value, onChange, disabled = false }: FontSelectProps) {
+  const listId = useId();
+  const [query, setQuery] = useState(value);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  const suggestions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    const filtered =
+      normalizedQuery.length === 0
+        ? fonts.slice(0, 40)
+        : fonts.filter((font) => font.family.toLowerCase().includes(normalizedQuery)).slice(0, 40);
+
+    const selected = fonts.find((font) => font.family === value);
+    if (selected && !filtered.some((font) => font.family === selected.family)) {
+      return [selected, ...filtered].slice(0, 40);
+    }
+
+    return filtered;
+  }, [fonts, query, value]);
+
+  const commitSelection = (rawValue: string) => {
+    const normalized = rawValue.trim().toLowerCase();
+    if (!normalized) {
+      setQuery(value);
+      return;
+    }
+
+    const exactMatch = fonts.find((font) => font.family.toLowerCase() === normalized);
+    if (!exactMatch) {
+      setQuery(value);
+      return;
+    }
+
+    setQuery(exactMatch.family);
+    if (exactMatch.family !== value) {
+      onChange(exactMatch.family);
+    }
+  };
+
   return (
-    <select className="font-match-select" aria-label={ariaLabel} value={value} onChange={(e) => onChange(e.target.value)}>
-      {fonts.map((font) => (
-        <option key={font.family} value={font.family}>
-          {font.family}
-        </option>
-      ))}
-    </select>
+    <div className="font-match-select-wrap">
+      <input
+        className="font-match-select"
+        aria-label={ariaLabel}
+        list={listId}
+        value={query}
+        placeholder="Search Google Fonts"
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setQuery(nextValue);
+
+          const normalized = nextValue.trim().toLowerCase();
+          const exactMatch = fonts.find((font) => font.family.toLowerCase() === normalized);
+          if (exactMatch && exactMatch.family !== value) {
+            onChange(exactMatch.family);
+          }
+        }}
+        onBlur={() => commitSelection(query)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commitSelection(query);
+            event.currentTarget.blur();
+            return;
+          }
+
+          if (event.key === "Escape") {
+            setQuery(value);
+            event.currentTarget.blur();
+          }
+        }}
+        disabled={disabled}
+      />
+      <datalist id={listId}>
+        {suggestions.map((font) => (
+          <option key={font.family} value={font.family} />
+        ))}
+      </datalist>
+    </div>
   );
 }
 
@@ -41,9 +116,10 @@ interface LockButtonProps {
   locked: boolean;
   ariaLabel: string;
   onClick: () => void;
+  disabled?: boolean;
 }
 
-function LockButton({ locked, ariaLabel, onClick }: LockButtonProps) {
+function LockButton({ locked, ariaLabel, onClick, disabled = false }: LockButtonProps) {
   return (
     <button
       type="button"
@@ -51,6 +127,7 @@ function LockButton({ locked, ariaLabel, onClick }: LockButtonProps) {
       aria-label={ariaLabel}
       aria-pressed={locked}
       onClick={onClick}
+      disabled={disabled}
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d={locked ? lockPaths.locked : lockPaths.unlocked} />
@@ -137,6 +214,8 @@ function FontMatch() {
     content,
     locked,
     fonts,
+    isCatalogLoading,
+    isPairUpdating,
     shuffle,
     setLayout,
     setAuthor,
@@ -160,21 +239,46 @@ function FontMatch() {
         <div className="font-match-controls-wrap">
           <div className="font-match-controls">
             <div className="font-match-font-row">
-              <FontSelect ariaLabel="Primary font" fonts={fonts} value={primary.family} onChange={setPrimary} />
+              <FontSelect
+                ariaLabel="Primary font"
+                fonts={fonts}
+                value={primary.family}
+                onChange={setPrimary}
+                disabled={isPairUpdating}
+              />
               <LockButton
                 locked={locked === "primary"}
                 ariaLabel="Lock primary font"
                 onClick={() => toggleLock("primary")}
+                disabled={isPairUpdating}
               />
-              <button type="button" className="font-match-shuffle" onClick={shuffle}>
-                Shuffle Fonts
+              <button
+                type="button"
+                className="font-match-shuffle"
+                onClick={() => {
+                  void shuffle();
+                }}
+                disabled={isPairUpdating || isCatalogLoading}
+              >
+                {isPairUpdating ? "Switching..." : "Shuffle Fonts"}
               </button>
               <LockButton
                 locked={locked === "secondary"}
                 ariaLabel="Lock secondary font"
                 onClick={() => toggleLock("secondary")}
+                disabled={isPairUpdating}
               />
-              <FontSelect ariaLabel="Secondary font" fonts={fonts} value={secondary.family} onChange={setSecondary} />
+              <FontSelect
+                ariaLabel="Secondary font"
+                fonts={fonts}
+                value={secondary.family}
+                onChange={setSecondary}
+                disabled={isPairUpdating}
+              />
+            </div>
+
+            <div className="font-match-font-meta">
+              <span>{isCatalogLoading ? "Loading Google Fonts catalog..." : `${fonts.length} fonts available`}</span>
             </div>
 
             <div className="font-match-divider-horizontal" />
