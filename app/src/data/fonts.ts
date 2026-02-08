@@ -18,7 +18,7 @@ export const fontPool: FontEntry[] = [
   { family: "Outfit", weights: [300, 400, 500, 600, 700], category: "sans-serif" },
   { family: "Sora", weights: [300, 400, 500, 600, 700], category: "sans-serif" },
   { family: "Manrope", weights: [300, 400, 500, 600, 700, 800], category: "sans-serif" },
-  { family: "General Sans", weights: [300, 400, 500, 600, 700], category: "sans-serif" },
+  { family: "Public Sans", weights: [300, 400, 500, 600, 700], category: "sans-serif" },
   { family: "Bricolage Grotesque", weights: [400, 500, 600, 700, 800], category: "sans-serif" },
   { family: "Instrument Serif", weights: [400], category: "serif" },
   { family: "Fraunces", weights: [300, 400, 500, 700, 900], category: "serif" },
@@ -34,15 +34,16 @@ export const fontPool: FontEntry[] = [
 const loadedFonts = new Set<string>();
 
 export function loadFont(family: string, weights: number[] = [300, 400, 500, 600, 700]): void {
-  const key = `${family}-${weights.join(",")}`;
+  const normalizedWeights = [...new Set(weights)].sort((a, b) => a - b);
+  const key = `${family}-${normalizedWeights.join(",")}`;
   if (loadedFonts.has(key)) return;
   loadedFonts.add(key);
 
-  const weightsStr = weights.join(";");
-  const familyStr = family.replace(/ /g, "+");
+  const weightsStr = normalizedWeights.join(";");
+  const familyStr = encodeURIComponent(family).replace(/%20/g, "+");
   const link = document.createElement("link");
   link.rel = "stylesheet";
-  link.href = `https://fonts.googleapis.com/css2?family=${familyStr}:ital,wght@0,${weightsStr};1,${weightsStr}&display=swap`;
+  link.href = `https://fonts.googleapis.com/css2?family=${familyStr}:wght@${weightsStr}&display=swap`;
   document.head.appendChild(link);
 }
 
