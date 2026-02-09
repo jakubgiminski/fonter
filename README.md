@@ -1,15 +1,11 @@
 # Fonter
 
-Fonter is a single-screen React + TypeScript app for testing font pairings in realistic content layouts.
+Fonter is a React app for testing font pairings in realistic content layouts.
 
-## What It Does
-
-The app lets you pick two font roles:
-
-- Primary font
-- Secondary font
-
-It then renders those fonts in a live preview so you can quickly evaluate combinations across different layout types and content styles.
+![Alt text](public/screenshots/01.png)
+![Alt text](public/screenshots/02.png)
+![Alt text](public/screenshots/03.png)
+![Alt text](public/screenshots/04.png)
 
 ## Tech Stack
 
