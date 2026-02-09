@@ -1,11 +1,17 @@
 # Fonter
 
-Fonter is a React app for testing font pairings in realistic content layouts.
+Fonter is a React app for testing font pairings in realistic content layouts. It lets you shuffle through the enitre google font library (1900+ fonts).
 
-![Alt text](public/screenshots/01.png)
-![Alt text](public/screenshots/02.png)
-![Alt text](public/screenshots/03.png)
-![Alt text](public/screenshots/04.png)
+<table>
+  <tr>
+    <td><img src="public/screenshots/01.png" alt="Screenshot 1" width="100%"></td>
+    <td><img src="public/screenshots/02.png" alt="Screenshot 2" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="public/screenshots/03.png" alt="Screenshot 3" width="100%"></td>
+    <td><img src="public/screenshots/04.png" alt="Screenshot 4" width="100%"></td>
+  </tr>
+</table>
 
 ## Tech Stack
 
